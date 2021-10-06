@@ -1,0 +1,392 @@
+---
+title: "Assignment_2"
+author: "Dan Rodrigues"
+date: "06/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Pre-requisites
+If using Ubuntu, run "sudo apt-get install libxml2-dev".
+Then install the following packages via the R console:
+
+* rvest
+* xml2
+* tidyverse
+* Stat2Data
+
+(Do so via : "install.packages(package_name)")
+
+Now begin by loading Tidyverse (for ggplot2) and Stat2Data (for "Hawks" data set), after which we construct a smaller custom data set for subsequent activities.
+```{r prerequisites, include=TRUE}
+# Import libraries
+library(tidyverse)
+library(Stat2Data)
+
+# Load Hawks data set
+data("Hawks")
+
+# Construct smaller data set by dropping rows with N/A's
+hawksSmall <- drop_na(select(Hawks, Age, Day, Month, Year, CaptureTime, Species, Wing, Weight, Tail))
+```
+
+## 1) Visualisation
+### 1.1) Types of variables
+```{r 1.1}
+# Use dim() function to find no. of rows and columns
+hawksSmallDim <- dim(hawksSmall)
+rows <- hawksSmallDim[1] # => 897 rows
+cols <- hawksSmallDim[2] # => 9 columns
+
+# Use head() function to display top 5 rows of data frame
+hawksSmallHead <- head(hawksSmall)
+print.data.frame(head(hawksSmallHead))
+```
+
+The following variables are present, with outlined data types:
+
+* Month = Discrete
+* Species = Categoric
+* Age = Categoric (Binary)
+* Wing = Continuous
+* Weight = Continuous
+
+### 1.2) What's wrong with the plot?
+The corresponding plot has several problems, including the following:
+
+* No labels for X and Y axes, so don't know what is being shown by position of glyphs. This is unfortunate, as position is easy to visually identify
+* Too much information is presented in one plot, which makes it hard to interpret or draw meaningful conclusions from
+* Colour scales are hard to gauge by eye, making it difficult to interpret the weight data. It is also not accessible to audiences that are colour blind
+* Size of glyphs is not very easy to distinguish, so could have been improved via the use of different shapes (or other)
+* Many data points are clustered in the top right region, and overlap one another. This makes it hard to visually identify all the data, and so a separate, more detailed plot (e.g. in a facet) could be preferable.
+
+### 1.3) Generate a histogram
+```{r 1.3}
+# Generate histogram of weights of hawks via ggplot and geom_histogram
+ggplot(data = hawksSmall, mapping = aes(x=Weight)) +
+  geom_histogram(binwidth=10) +
+  xlab("Weight (gm)") +
+  ylab("Count")
+```
+
+An aesthetic is a mapping from a variable to a plot feature / visual cue. Here, weight is mapped to horizontal position (and count is mapped to vertical position)
+
+The data distribution appears to be Bimodal, indicated by the presence of two regional peaks in histogram count in the plot at approximately 200 gm and 1000 gm.
+
+### 1.4) Generate a density plot
+```{r 1.4.1.1}
+# Generate a density plot of tail lengths of hawks via ggplot and geom_density 
+ggplot(data = hawksSmall, mapping = aes(x=Tail)) +
+  geom_density() +
+  xlab("Tail (mm)") +
+  ylab("Density")
+```
+```{r 1.4.1.2}
+# Recreate, but with adjust = 0.5
+# (adjust=1.0) is same as original
+ggplot(data = hawksSmall, mapping = aes(x=Tail)) +
+  geom_density(adjust=0.5) +
+  xlab("Tail (mm)") +
+  ylab("Density")
+```
+
+The adjust argument modifies the bandwidth of the kernel, i.e. modifies the strength of the smoothing operation, with a smaller adjust value providing less smoothing, and hence resulting in a seemingly higher frequency curve.
+
+The data distribution appears to be Trimodal.
+
+We now attempt to recreate some provided plots:
+```{r 1.4.2.1}
+ggplot(data = hawksSmall, mapping = aes(x=Tail, color=Species)) +
+  geom_density(adjust=1.0) +
+  xlab("Tail (mm)") +
+  ylab("Density") +
+  theme_bw()
+```
+
+```{r 1.4.2.2}
+ggplot(data = hawksSmall, mapping = aes(x=Tail, y=Species, fill = Species)) +
+  geom_violin() +
+  xlab("Tail (mm)") +
+  ylab("Species") +
+  theme_bw()
+```
+
+### 1.5) Scatter Plots
+The plot has 4 aesthetics (mappings from features to visual cues):
+
+* Tail length -> horizontal position
+* Weight -> vertical position
+* Species -> colour
+* Species -> shape
+```{r 1.5}
+ggplot(data = hawksSmall, mapping = aes(x=Tail, y=Weight, color=Species, shape=Species)) +
+  geom_point() +
+  xlab("Tail (mm)") +
+  ylab("Weight (gm)") +
+  theme_bw()
+```
+
+### 1.6) Trend lines and facet wraps
+```{r 1.6}
+# Extract maximum data for annotation
+heaviest_halk <- max(filter(hawksSmall)$Weight, na.rm = TRUE)
+
+ggplot(data = hawksSmall, mapping = aes(x=Tail, y=Weight, color=Species)) + 
+  geom_point() +
+  geom_smooth(formula = y ~ x, method="lm") +
+  facet_wrap(~Species, scales="free") +
+  xlab("Tail (mm)") +
+  ylab("Weight (gm)") +
+  theme_bw() +
+  geom_text(x=204.5, y=1940, label=paste("Heaviest halk weighs", heaviest_halk, "g"), show.legend=FALSE, size=3.1, color="black")
+```
+
+Visual cues:
+
+* Horizontal position (tail)
+* Vertical position (weight)
+* Colour (species)
+
+Based on plot, can say that tail length and weight appear to be positively correlated (i.e. as tail length increases, the width of the hawk also increases).
+
+## 2) Data Wrangling
+### 2.1) Select and filter functions
+```{r 2.1}
+# Create hSF data frame containing "Wing", "Weight", "Tail" columns, with rows belonging to species of Red-Tailed Hawks (RT) and weight >= 1kg
+hSF <- hawksSmall %>%
+          filter(Species == "RT" & Weight >= 1000) %>%
+          select(Wing, Weight, Tail)
+
+print.data.frame(head(hSF))
+```
+
+hSF has dimensions 398x3 (found using "dim()" command).
+
+hSF has 3 variables (wing, weight, tail).
+
+hSF has 398 observations or "cases" (a case is an expeimental unit from which data is collected, e.g. an indivdual hawk in this case).
+
+You would communicate this information to a Machine Learning (ML) practitioner by saying that the dataset has 3 features (corresponding to the variables), and that the dataset is of size 398, or has 398 samples (or data points).
+
+### 2.2) Arrange function
+```{r 2.2}
+# Use arrange function to sort hSF so rows appear in increasing order of wing span
+rearranged_hSF <- arrange(hSF, Wing)
+
+print.data.frame(head(rearranged_hSF))
+```
+
+### 2.3) Join and rename functions
+```{r 2.3}
+# Create species code to full name correspondence data frame
+species_code <- c("CH", "RT", "SS")
+species_name_full <- c("Cooper's", "Red-tailed", "Sharp-shinned")
+species_correspondence <- data.frame(species_code, species_name_full)
+print.data.frame(species_correspondence)
+
+# Create a new data frame (hawksFullName), which is same as Hawks, except that Species contains full name rather than two letter codes
+
+# Note: we take Hawks data frame, rename Species to species_code to facilitate (left) join, then rename species_name_full to Species, and finally remove the species_code column
+
+hawksFullName <- Hawks %>%
+                 rename(species_code = Species) %>%
+                 left_join(species_correspondence) %>%
+                 rename(Species = species_name_full) %>%
+                 select(-species_code)
+                 
+print.data.frame(head(select(hawksFullName, Species, Wing, Weight), 7))
+```
+
+*Note: in this instance, it doesn't matter what type of join is used, as the same "Species" or "species_code" data or categories are present in both data frames, so all joins or mappings from one data frame to the other using these columns will be identical.*
+
+*Note: This would not necessarily be the case if there was additional data in one vs the other, e.g. if the Hawks data frame had another species code, e.g. AA, which wasn't present in the other data frame (or vice versa). The result would either be N/A's in the resulting joined data frame, or omitted values where the new species code could not be found in the other data frame.*
+
+### 2.4) Mutate function
+```{r 2.4}
+hawksWithBMI <- Hawks %>%
+                mutate(bird_BMI = 1000 * Weight/Wing**2) %>%
+                select(Species, bird_BMI) %>% 
+                arrange(desc(bird_BMI))
+
+print.data.frame(head(hawksWithBMI, 8))
+
+filtered_hawksWithBMI <- filter(hawksWithBMI, bird_BMI < 100)
+ggplot(data = filtered_hawksWithBMI, mapping = aes(x=bird_BMI, y=Species, fill=Species)) + 
+  geom_violin() + 
+  xlab("Bird BMI") + 
+  ylab("Species") + 
+  theme_bw()
+```
+
+### 2.5) Summarize and Group-by functions
+```{r 2.5}
+# Create a summary table (using summarize, groupby), broken down by Hawk species containing following quantities:
+# Number of rows
+# Mean average wing span in cm
+# Median wing span in cm
+# Trimmed mean average wing span in centimeters (trim=0.1)
+# Mean average of the ratio between wing span and tail length
+# Note: we need to divide values by 10 to get cm, as in mm by default
+hawksFullName %>%
+  group_by(Species) %>%
+  summarize (
+    num_rows=n(), mn_wing=mean(Wing/10, na.rm=TRUE), md_wing=median(Wing/10, na.rm=TRUE), t_mn_wing=mean(Wing/10, na.rm=TRUE, trim=0.1), tail_wing_ratio = mean(Wing/Tail, na.rm=TRUE)
+  )
+
+# Then create summary table of following form:
+# No. of missing values broken down by species, for specified columns
+hawksFullName %>%
+  select(Species, Wing, Weight, Culmen, Hallux, Tail, StandardTail, Tarsus, Crop) %>%
+  group_by(Species) %>%
+  summarize(across(everything(), ~sum(is.na(.x))))
+```
+
+## 3) Exploratory Data Analysis
+### 3.1) Combining location estimators with summarise function
+```{r 3.1}
+# Compute sample mean, sample median, and trimmed sample mean (with q = 0.1)
+Hawks %>%
+  summarise(
+    Wing_mean=mean(Wing, na.rm=TRUE), Wing_t_mean=mean(Wing, na.rm=TRUE, trim=0.1), Wing_med=median(Wing, na.rm=TRUE), Weight_mean=mean(Weight, na.rm=TRUE), Weight_t_mean=mean(Weight, na.rm=TRUE, trim=0.1), Weight_med=median(Weight, na.rm=TRUE)
+  )
+
+# Combining with group_by for species break down
+Hawks %>%
+  group_by(Species) %>%
+  summarise(
+    Wing_mean=mean(Wing, na.rm=TRUE), Wing_t_mean=mean(Wing, na.rm=TRUE, trim=0.1), Wing_med=median(Wing, na.rm=TRUE), Weight_mean=mean(Weight, na.rm=TRUE), Weight_t_mean=mean(Weight, na.rm=TRUE, trim=0.1), Weight_med=median(Weight, na.rm=TRUE)
+  )
+```
+
+### 3.2) Location and dispersion estimators under linear transformations
+Suppose that a variable of interest $X_i$ has values $X_1, ..., X_n$. Suppose that $X_1, ..., X_n$ has sample mean $\hat{\mu}$. Let $a, b \in \Bbb R$ be real numbers and define a new variable $\tilde{X}_i$ with values $\tilde{X}_1, ..., \tilde{X}_n$ defined by $\tilde{X}_i = a \cdot X_i + b$ for $i=1, ..., n$. Show that $\tilde{X}_1, ..., \tilde{X}_n$ has sample mean $a \cdot \hat{\mu} + b$.
+
+$$
+\begin{aligned}
+E(\tilde{X}) &= \frac{\sum_{i=1}^{n}{\tilde{X}_i}}{n} \\
+&= \frac{\sum_{i=1}^{n}{(a \cdot X_i + b)}}{n} \\
+&= \frac{a \cdot n \cdot \sum_{i=1}^{n}{X_i} + b \cdot n}{n} \\
+&= \frac{n (a \cdot \hat{\mu} + b)}{n} \\
+&= a \cdot \hat{\mu} + b \\
+&= aE(X)+b
+\end{aligned}
+$$
+
+Suppose further that $X_1, ..., X_n$ has sample variance $S_X^2$. What is the sample variance of $\tilde{X}_1, ..., \tilde{X}_n$?
+
+$$
+\begin{aligned}
+S_\tilde{X}^2 &= \frac{\Sigma(\tilde{X}-E(\tilde{X}))^2}{n} \\
+&= \frac{\Sigma(aX + b - aE(X)-b)^2}{n} \\
+&= \frac{\Sigma(a(X-E(X)))^2}{n} \\
+&= \frac{a^2(X-E(X))^2}{n} \\
+&= a^2S_X^2
+\end{aligned}
+$$
+
+What is the sample standard deviation of $\tilde{X}_1, ..., \tilde{X}_n$?
+
+\[ \text{Sample Standard Deviation} = S_\tilde{X} = \sqrt{S_\tilde{X}^2} = \sqrt{a^2S_X^2} = aS_X \]
+
+### 3.3) Robustness of location estimators
+```{r 3.3}
+# Begin by exxtracting vector of hallux lengths without means
+hal <- Hawks$Hallux
+hal <- hal[!is.na(hal)]
+
+# Generate new vector (corrupted_hal) with 10 outliers, each of value 100, to investigate effect of outliers
+outlier_val <- 100
+num_outliers <- 10
+corrupted_hal <- c(hal, rep(outlier_val, times=num_outliers))
+
+# Compute mean of original and corrupted
+mean(hal) # 26.41086
+mean(corrupted_hal) # 27.21776
+# Already, corrupted mean shifted slightly higher (positive skew)
+
+# Now investigate what happens with more outliers (increasing from 0 to 1000)
+num_outliers_vect <- seq(0, 1000)
+means_vect <- c()
+t_means_vect <- c()
+medians_vect <- c()
+
+for (num_ouliers in num_outliers_vect) {
+  corrupted_hal <- c(hal, rep(outlier_val, times=num_ouliers))
+  means_vect <- c(means_vect, mean(corrupted_hal))
+  t_means_vect <- c(t_means_vect, mean(corrupted_hal, trim=0.1))
+  medians_vect <- c(medians_vect, median(corrupted_hal))
+}
+
+df_means_medians <- data.frame(num_outliers=num_outliers_vect, mean=means_vect, t_mean=t_means_vect, median=medians_vect)
+
+df_means_medians %>%
+  pivot_longer(!num_outliers, names_to = "Estimator", values_to = "Value") %>%
+  ggplot( aes(x=num_outliers, color=Estimator, linetype=Estimator, y=Value)) +
+  geom_line() + xlab("Number of outliers")
+
+```
+
+### 3.4) Box plots and outliers
+```{r 3.4.1}
+ggplot(data = Hawks, mapping = aes(x=Species, y=Weight)) + 
+  geom_boxplot()
+```
+
+```{r 3.4.2}
+num_outliers <- function(X) {
+  # This function takes in a sample, X, and outputs the number of outliers
+  
+  # Calculate the upper and lower quartile, and IQR
+  q75 <- quantile(X, 0.75, na.rm=TRUE)
+  q25 <- quantile(X, 0.25, na.rm=TRUE)
+  IQ_Range <- q75 - q25
+  
+  # Find upper and lower bounds for X
+  X_upper <- q75 + 1.5 * IQ_Range
+  X_lower <- q25 - 1.5 * IQ_Range
+  
+  # Find all outliers
+  outliers <- X[(X > X_upper) | (X < X_lower)]
+  
+  # Find number of outliers by counting non-na items
+  num_of_outliers <- sum(!is.na(outliers))
+  return(num_of_outliers)
+}
+
+# Find number of outliers for one-off example
+# num_outliers(filter(Hawks, Species=="SS")$Weight)
+
+# Find summary of outliers for weight
+Hawks %>%
+  group_by(Species) %>%
+  summarise(
+    num_outliers_weight = num_outliers(Weight)
+  )
+```
+
+### 3.5) Covariance and correlation under linear transformations
+Suppose that we have a pair of variables: $X_i$ with values $X_1, ..., X_n$ and $Y_i$ with values $Y_1, ..., Y_n$. Suppose that $X_1, ..., X_n$ and $Y_1, ..., Y_n$ have sample covariance $\Sigma_{X,Y}$. Let $a, b \in \Bbb R$ be real numbers and define a new variable $\tilde{X}_i$ with values $\tilde{X}_1, ..., \tilde{X}_n$ defined by $\tilde{X}_i = a \cdot X_i + b$ for $i = 1, ..., n$. In addition, let $c, d \in \Bbb R$ be real numbers and define a new variable $\tilde{Y}_i$ with values $\tilde{Y}_1, ..., \tilde{Y}_n$ defined by $\tilde{Y}_i = c \cdot Y_i + d$ for $i = 1, .., n$. What is the covariance between the pair of variables $\tilde{X}_1, ..., \tilde{X}_n$ and $\tilde{Y}_1, ..., \tilde{Y}_n$?
+
+$$
+\begin{aligned} 
+cov_{\tilde{X},\tilde{Y}} &= \frac{\Sigma(\tilde{X}-E(\tilde{X}))(\tilde{Y}-E(\tilde{Y}))}{N-1} \\
+&= \frac{\Sigma(aX+b-aE(X)-b)(cY+d-cE(Y)-d)}{N-1} \\ 
+&= \frac{a \cdot c \cdot \Sigma(X-E(X))(Y-E(Y))}{N-1} \\
+&= a \cdot c \cdot cov_{X,Y}
+\end{aligned}
+$$
+
+Suppose that $X_1, ..., X_n$ and $Y_1, ..., Y_n$ have correlation $\rho_{X, Y}$. What is the correlation of variables $\tilde{X}_1, ..., \tilde{X}_n$ and $\tilde{Y}_1, ..., \tilde{Y}_n$?
+
+$$
+\begin{aligned}
+\rho_{\tilde{X}, \tilde{Y}} &= \frac{\Sigma(\tilde{X}-E(\tilde{X}))(\tilde{Y}-E(\tilde{Y}))}{\sqrt{\Sigma(\tilde{X}-E(\tilde{X}))^2\Sigma(\tilde{Y}-E(\tilde{Y}))^2}} \\
+&= \frac{cov_{\tilde{X},\tilde{Y}}}{S_\tilde{X}S_\tilde{Y}} \\
+&= \frac{a \cdot c \cdot cov_{X,Y}}{a \cdot S_X \cdot c \cdot S_Y} \\
+&= \frac{cov_{X,Y}}{S_X S_Y} \\
+&= \rho_{X,Y}
+\end{aligned}
+$$
