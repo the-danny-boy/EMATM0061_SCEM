@@ -1,0 +1,198 @@
+---
+title: "Assignment_3"
+author: "Dan Rodrigues"
+date: "19/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1 - Random experiments, events and sample spaces
+- Random Experiment = A procedure (real or imagined) which has a well-defined set of possible outcomes, and could (in principle) be repeated arbitrarily many times.
+
+- Event = A set (or collection) or possible outcomes.
+
+- Sample Space = The set of all possible outcomes of interest for a random experiment.
+
+An example:
+
+- My random experiment - I toss a fair coin, and want to see which side lands face up
+- Possible outcomes - Heads (0), Tails (1)
+- Events - The set of events is $\varepsilon=\{\emptyset, 0, 1, \{0,1\}\}$.
+  - The empty-set is where neither outcome occurs (e.g. lands on side), which we deem impossible for the experiment.
+  - The event $\{0\}$ occurs when the coin lands on heads.
+  - The event $\{1\}$ occurs when the coin lands on tails.
+  - The event $\{0, 1\}$ occurs when the coin lands on heads or tails (always occurs).
+- Sample Space - The sample space is $\Omega = \{0,1\}$ and contains both desired outcomes (the coin landing heads, and the coin landing tails).
+
+## 2 - Tidy data and iteration
+### 2.1 - Missing data and iteration
+The following function (provided) uses the "map_dbl" function, which is provided by the "purrr" library, which is part of the larger "tidyverse" library.
+
+```{r dependencies}
+library(tidyverse)
+```
+
+```{r impute_by_mean}
+impute_by_mean<-function(x){
+  mu<-mean(x,na.rm=1) # first compute the mean of x
+    impute_f<-function(z){ # coordinate-wise imputation
+      if(is.na(z)){
+        return(mu) # if z is na replace with mean
+      }else{
+        return(z) # otherwise leave in place
+      }
+    }
+  return(map_dbl(x,impute_f)) # apply the map function to impute across vector
+}
+```
+
+We now create a similar function to impute by median...
+```{r impute_by_median}
+impute_by_median <- function(x){
+  mu<-median(x,na.rm=1) # first compute the median of x
+    impute_f<-function(z){ # coordinate-wise imputation
+      if(is.na(z)){
+        return(mu) # if z is na replace with median
+      }else{
+        return(z) # otherwise leave in place
+      }
+    }
+  return(map_dbl(x,impute_f)) # apply the map function to impute across vector
+}
+
+v<-c(1,2,NA,4)
+impute_by_median(v)
+```
+
+Now, generate a data frame, df_xy.
+```{r df_xy}
+x <- seq(from=0, to=10, by=0.1)
+y <- 5 * x + 1
+df_xy <- data.frame(x, y)
+
+df_xy %>% 
+  mutate(z=map2_dbl(x, y, ~.x+.y)) %>% 
+  head(5)
+```
+
+Now, create a function to generate NA's for indices divisible by 5.
+```{r generate_NA}
+sometimes_missing <- function(index, value) {
+  if(index %% 5 == 0) {
+    return(NA)
+  } else {
+    return(value)
+  }
+}
+```
+
+Now, use the function to create df_xy_missing with missing data.
+```{r generate_df_xy_missing}
+df_xy_missing <- df_xy %>% 
+  mutate(y=map2_dbl(.x=row_number(), .y=y, sometimes_missing))
+
+df_xy_missing %>% 
+  head(10)
+```
+
+Now, create a median-imputed version of df_xy_missing.
+```{r median-imputed df_xy_missing}
+df_xy_impute <- df_xy_missing %>% 
+  mutate(y = impute_by_median(y))
+
+df_xy_impute %>% 
+  head(10)
+```
+
+Combining and plotting...
+```{r combining and plotting}
+df_xy <- df_xy %>% 
+  mutate(source="original")
+
+df_xy_missing <- df_xy_missing %>% 
+  mutate(source="corrupted")
+
+df_xy_impute <- df_xy_impute %>% 
+  mutate(source="imputed")
+
+df_combined <- rbind(df_xy, df_xy_missing, df_xy_impute)
+
+ggplot(df_combined, aes(x=x, y=y, color=source)) + 
+  geom_point() +
+  facet_wrap(~source) + 
+  geom_smooth(method="lm")
+```
+
+The imputed values seem to give a reasonable overall estimate of the true values of y from the trend line, thereby achieving a similar central location, which is motivated by the use of the median for the imputing operation. However, the use of the median is an excessive simplification, and disregards any concept of covariation (the value-to-impute is found using only the corrupted column, hence ignoring any potential supporting information in the other columns). While certainly applicable for univariate cases, this reduces its utility for bivariate or multivariate scenarios, in favour of more sophisticated techniques that preserve or exploit such relations.
+
+### 2.2 - Tidying data with pivot functions
+Here, we read in data from a spreadsheet, and apply some data wrangling operations to tidy the data.
+(Note: we are using an excel spreadsheet, so require the "readxl" library.)
+
+```{r Read Excel}
+# Load the readxl library
+library(readxl) 
+
+# Obtain file path for excel spreadsheet
+folder_path <- "D:\\Documents\\GitHub\\EMATM0061_SCEM\\Assignment_3\\"
+file_name <- "HockeyLeague.xlsx"
+file_path <- paste(folder_path, file_name, sep="")
+
+# Read of a sheet from an xl file
+wins_data_frame <- read_excel(file_path, sheet="Wins") 
+
+wins_data_frame %>% 
+  select(1:5) %>% 
+  head(3)
+```
+
+Note: this data is NOT tidy, as each cell contains composite / combined data, namely the number of wins AND total number of games per season, as opposed to being presented in different columns. A tidy variant would have one column displaying the all the wins, and another for the year - reading across, it would then be easy to extract how many wins a given team had in a particular year or season, which is likely one of the motivating questions behind the investigation / analysis.
+
+Next, we apply some data wrangling operations to tidy up the data frame (creating "wins_tidy").
+
+```{r data wrangling}
+wins_tidy <- wins_data_frame %>% 
+  rename(Team = ...1) %>% 
+  pivot_longer(cols=!Team, names_to = "Year", values_to = "Data") %>% 
+  mutate(Year=as.integer(Year)) %>% 
+  separate(Data, into=c("Wins", "Total"), sep=" of ", convert=TRUE)
+
+wins_tidy %>% 
+  head(5)
+```
+
+We do similar for the losses, and combine it all
+```{r wrangle losses}
+# Read, and tidy loss data
+losses_tidy <- read_excel(file_path, sheet="Losses") %>% 
+  rename(Team = ...1) %>% 
+  pivot_longer(cols=!Team, names_to = "Year", values_to = "Data") %>% 
+  mutate(Year=as.integer(Year)) %>% 
+  separate(Data, into=c("Losses", "Total"), sep=" of ", convert=TRUE)
+  
+losses_tidy %>% 
+  head(5)
+
+# Now combine data frames
+hockey_df <- inner_join(wins_tidy, losses_tidy) %>% 
+  mutate(Draws=Total-Wins-Losses) %>%
+  mutate(across(starts_with(c("Wins", "Losses", "Draws")), ~.x/Total, .names="{.col}_rt"))
+
+hockey_df %>% 
+    head(5)
+```
+
+Conclude by generating summary data frame...
+```{r summary data frame}
+hockey_df %>%
+  select(-Wins, -Draws, -Losses) %>%
+  group_by(Team) %>%
+  summarise(across(starts_with(c("Wins","Losses","Draws")), list(md=median, mn=mean),
+  .names = "{substring(.col,1,1)}_{.fn}")) %>%
+  arrange(desc(W_md))
+```
+
+#### Note: Section 3 (Elementary Set Theory) and Section 4 (Introduction to Probability) are Omitted from this R Markdown document, given the omission of programmatic tasks in favour of mathematical problems. The included answer sheet provides typeset solutions to these questions.
