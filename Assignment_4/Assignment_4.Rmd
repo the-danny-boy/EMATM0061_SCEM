@@ -1,0 +1,181 @@
+---
+title: "Assignment_4"
+author: "Dan Rodrigues"
+date: "20/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1 - Bayes Theorem
+Let $A$ be the event that it rains next week.
+Let $B$ be the event that the weather forecaster predicts that there
+will be rain next week.
+
+\begin{aligned}
+\text{Stating available information:} \\
+\mathbb{P}(A)&=0.9\\
+\mathbb{P}(B|A)&=0.8\\
+\mathbb{P}(B^C|A^C)&=0.75\\
+\\
+\text{Reciting Bayes' Theorem:} \\
+\mathbb{P}(A \cap B) &= \mathbb{P}(B|A) \cdot \mathbb{P}(A) \\
+\\
+\text{Using the Law of Total Probability to find $\mathbb{P}(B)$:} \\
+\mathbb{P}(B) &= \mathbb{P}(B \cap A) + \mathbb{P}(B \cap A^C) \\
+  &= \mathbb{P}(B|A) \cdot \mathbb{P}(A) + \mathbb{P}(B|A^C) \cdot \mathbb{P}(A^C) \\
+  &= \mathbb{P}(B|A) \cdot \mathbb{P}(A) + (1-\mathbb{P}(B^C|A^C)) \cdot (1-\mathbb{P}(A)) \\
+\\
+\text{Using Bayes' Theorem to find $\mathbb{P}(A|B)$:} \\
+\mathbb{P}(A|B) &= \frac{\mathbb{P}(A \cap B)}{\mathbb{P}(B)} 
+  = \frac{\mathbb{P}(B|A) \cdot \mathbb{P}(A)}{\mathbb{P}(B|A) \cdot \mathbb{P}(A) + (1-\mathbb{P}(B^C|A^C)) \cdot (1-\mathbb{P}(A))} \\
+  &= \frac{0.8 \cdot 0.9}{0.8 \cdot 0.9 + (1 - 0.75) \cdot (1 - 0.9)} 
+  = \frac{0.72}{0.72 + 0.25 \cdot 0.1}
+  = \frac{144}{149} = 0.966
+
+\end{aligned}
+
+## 2 - Conditional probabilities
+This section shall be omitted.
+
+## 3 - Sampling with replacement
+Retrieve the number of subsets of size 3 from a set of 8 objects:
+```{r choose introduction}
+choose(8,3)
+```
+
+Now we have a new scenario, with a bag containing 10 spheres (3 red, and 7 blue). We pick a sphere from the bag at random, record its colour, then return the sphere to the bag. This is repeated 35 times, and is an example of sampling with replacement.
+
+_Note: this is a simple probability space, so we can find the probability of each event via the cardinality of the correponding set._
+
+The probability that $z$ out of 35 selections were red spheres, is given by:
+$$ 
+\begin{aligned}
+\mathbb{P}(X=z) &= \binom{35}{z} \cdot \mathbb{P}(red)^z \cdot (1-\mathbb{P}(red))^{35-z} \\
+  &= \binom{35}{z} \cdot \left( \frac{3}{10} \right)^z \cdot \left( \frac{7}{10} \right)^{35-z} \\
+\end{aligned}
+$$
+
+Now, we write a function to compute the probability that $z$ out of the total 35 balls selected are ted.
+
+```{r prob_red_spheres}
+num_red_balls <- 3
+num_blue_balls <- 7
+total_draws <- 35
+
+# Note the use of log probabilities here, as computationally superior due to favourable mathematical properties for improved speed and accuracy
+prob_red_spheres <- function(z) {
+  total_balls <- num_red_balls + num_blue_balls
+  log_prob <- log(choose(total_draws, z)) + z * log(num_red_balls / total_balls) + (total_draws - z)  * log(num_blue_balls / total_balls)
+  return(exp(log_prob))
+}
+
+prob_red_spheres(20)
+```
+
+Now, we create a prob_by_num_reds data frame to show the probability of obtaining the different numbers of red spheres.
+
+```{r prob_by_num_reds}
+library(tidyverse)
+prob_by_num_reds <- data.frame(num_reds = seq(35)) %>%
+  mutate(prob = prob_red_spheres(num_reds))
+
+prob_by_num_reds %>%
+  head(5)
+```
+
+```{r plot our data frame}
+ggplot(data = prob_by_num_reds, mapping = aes(x = num_reds, y = prob)) + 
+  geom_line() +
+  xlab("Number of reds") +
+  ylab("Probability") +
+  theme_bw()
+```
+
+```{r random sampling}
+set.seed(0)
+print(sample(10,35, replace = TRUE))
+
+for(i in 1:5) {
+  set.seed(i)
+  print(sample(100, 5, replace=FALSE))
+}
+```
+
+Now construct a simulation study to explore probability of selecting z red balls from a bag of size 10, with 3 red and 7 blue balls, when sampling 35 balls with replacement.
+
+```{r random sampling simulation task}
+# Set the number of trials
+num_trials <- 1000
+
+# Set the random seed
+set.seed(0)
+
+# Generate collection of num_trials simulations
+sampling_with_replacement_simulation <- data.frame(trial=1:num_trials) %>%
+  mutate(sample_balls = map(.x=trial, ~sample(10, 35, replace = TRUE))) %>%
+  mutate(num_reds = map_dbl(.x=sample_balls, ~sum(.x<=3)))
+
+# head(sampling_with_replacement_simulation)
+
+# Logic test...
+# test_sample_balls <- c(9, 4, 7, 1, 2, 7, 2, 3, 1, 5, 5, 10, 6, 10, 7, 9, 5, 5, 9, 9, 5, 5, 2, 10, 9, 1, 4, 3, 6, 10, 10, 6, 4, 4, 10)
+# test_sample_replacement <- sum(test_sample_balls <= 3)
+# test_sample_replacement
+
+# Extract a vector corresponding to the number of reds in each trial
+num_reds_in_simulation <- sampling_with_replacement_simulation %>% 
+  pull(num_reds)
+
+# Add a column which gives the number of trials with a given number of reds
+prob_by_num_reds <- prob_by_num_reds %>%
+  mutate(simulation_count = map_dbl(.x=num_reds, ~sum(num_reds_in_simulation==.x))) %>%
+  mutate(expected_count = num_trials * prob)
+
+prob_by_num_reds %>%
+  rename(Simulation = simulation_count, Expected = expected_count) %>%
+  pivot_longer(cols = c("Simulation", "Expected"), names_to = "Type", values_to = "count") %>%
+  ggplot(aes(num_reds, count)) +
+    geom_line(aes(linetype=Type, color=Type)) +
+    scale_linetype_manual(values = c("solid", "dashed")) +
+    theme_bw() +
+    xlab("Number of reds") +
+    ylab("Count")
+```
+
+## 4 - Sampling without replacement
+Suppose we have 100 spheres. There are 50 red spheres, 30 blue spheres, and 20 green spheres. Suppose that we sample 10 spheres from the bag without replacement. What is the probability that one of more colours is missing from your selection?
+
+```{r sampling without replacement}
+# 1) Set a random seed
+set.seed(0)
+
+# 2) Set experiment parameters
+number_of_trials <- 100000
+number_of_reds <- 50
+number_of_blues <- 30
+number_of_greens <- 20
+sample_size <- 10
+
+number_of_balls_total <- number_of_reds + number_of_blues + number_of_greens
+
+# 3) Generate samples
+# 4) Compute number of each colour in sample
+# 5) Compute minimum of counts (to find missing)
+# 6) Compute proportion of rows with missing colour
+sampling_without_replacement_simulation <- data.frame(trial=1:number_of_trials) %>%
+  mutate(sample_balls = map(.x=trial, ~sample(number_of_balls_total, sample_size, replace = FALSE))) %>%
+  mutate(num_reds = map_dbl(.x=sample_balls, ~sum(.x <= number_of_reds))) %>%
+  mutate(num_blues = map_dbl(.x=sample_balls, ~sum(.x > number_of_reds & .x <= number_of_reds + number_of_blues))) %>%
+  mutate(num_greens = map_dbl(.x=sample_balls, ~sum(.x > number_of_reds + number_of_blues))) %>%
+  mutate(missing_colour = (pmin(num_reds, num_blues, num_greens) == 0) )
+
+prob_missing_simulation <- mean(sampling_without_replacement_simulation %>%
+                                  pull(missing_colour))
+
+print(prob_missing_simulation)
+```
+
+#### Note: further questions are omitted from the R Markdown document. The included answer sheet may provide illustrative examples of these solutions.
